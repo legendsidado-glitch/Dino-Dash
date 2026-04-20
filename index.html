@@ -1,0 +1,720 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Dino Dash | Pro Edition</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f8fafc;
+            margin: 0;
+            touch-action: manipulation;
+            -webkit-user-select: none;
+            user-select: none;
+            overflow-x: hidden;
+        }
+        #loading-screen {
+            position: fixed;
+            inset: 0;
+            background: white;
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            transition: opacity 0.5s ease-out;
+        }
+        #loader-wrapper {
+            width: 80%;
+            max-width: 500px;
+            height: 12px;
+            background: #f1f5f9;
+            border-radius: 20px;
+            position: relative;
+            margin-top: 40px;
+        }
+        #loading-progress-bg {
+            position: absolute;
+            top: 0;
+            left: 0;
+            height: 100%;
+            background: #22c55e;
+            width: 0%;
+            border-radius: 20px;
+            z-index: 1;
+        }
+        #loading-content {
+            position: relative;
+            z-index: 2;
+            text-align: center;
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        #loading-dino-container {
+            position: fixed;
+            top: -100px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 10000;
+            pointer-events: none;
+            opacity: 0;
+        }
+        .impact-particle {
+            position: fixed;
+            width: 8px;
+            height: 8px;
+            background: #22c55e;
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 10001;
+            animation: explode 0.5s ease-out forwards;
+        }
+        @keyframes explode {
+            to { transform: translate(var(--tx), var(--ty)) scale(0); opacity: 0; }
+        }
+        .dino-drop { transition: top 0.6s cubic-bezier(0.47, 0, 0.74, 0.71); }
+        .dino-walk { transition: left 1.5s linear; }
+        .dino-fall-out { transition: top 0.8s cubic-bezier(0.55, 0.055, 0.675, 0.19), left 0.8s linear; }
+
+        #canvas-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: #f1f5f9;
+            position: relative;
+            width: 100%;
+            padding: 20px 0;
+            border-radius: 24px;
+            margin-bottom: 20px;
+        }
+        canvas {
+            image-rendering: crisp-edges;
+            border-radius: 12px;
+            background: #ffffff;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            width: 800px;
+            height: 350px;
+            max-width: 100%;
+            height: auto;
+            touch-action: none;
+        }
+
+        .green-gradient { background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%); }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background-color: #22c55e; border-radius: 10px; }
+        
+        .preview-bounce {
+            animation: preview-bounce 2s ease-in-out infinite;
+        }
+        @keyframes preview-bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+        }
+    </style>
+</head>
+<body class="text-slate-800">
+
+    <!-- Loading Screen -->
+    <div id="loading-screen">
+        <div id="loading-content">
+            <h1 class="text-4xl font-black text-slate-900 tracking-tighter" id="loading-text">DINO DASH...</h1>
+            <div id="loader-wrapper"><div id="loading-progress-bg"></div></div>
+        </div>
+    </div>
+
+    <!-- Loading Dino -->
+    <div id="loading-dino-container">
+        <svg width="60" height="60" viewBox="0 0 60 60" fill="#16a34a" xmlns="http://www.w3.org/2000/svg">
+            <path d="M5 40 L15 35 L15 50 Z" /><rect x="13" y="30" width="25" height="25" rx="5" />
+            <rect x="30" y="15" width="10" height="20" rx="3" /><rect x="33" y="10" width="22" height="12" rx="4" />
+            <rect x="20" y="55" width="6" height="8" id="loading-leg-1" /><rect x="30" y="55" width="6" height="8" id="loading-leg-2" />
+            <rect x="45" y="13" width="4" height="4" fill="white" />
+        </svg>
+    </div>
+
+    <nav class="bg-white border-b border-slate-100 sticky top-0 z-50 px-6 py-3 flex justify-between items-center shadow-sm">
+        <div class="flex items-center gap-2">
+            <div class="w-10 h-10 green-gradient rounded-lg flex items-center justify-center text-white shadow-sm">
+                <svg viewBox="0 0 24 24" fill="currentColor" class="w-6 h-6">
+                    <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
+                </svg>
+            </div>
+            <h1 class="font-extrabold text-xl tracking-tight text-slate-900 uppercase">DINO<span class="text-green-600">DASH</span></h1>
+        </div>
+        <div class="flex gap-4 items-center">
+            <div class="flex flex-col items-end">
+                <span class="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Level</span>
+                <span id="ui-level" class="font-bold text-slate-900">1</span>
+            </div>
+            <div class="flex flex-col items-end">
+                <span class="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Coins</span>
+                <span id="ui-coins" class="font-bold text-green-600">0</span>
+            </div>
+            <button onclick="toggleAdmin()" class="p-2 hover:bg-slate-100 rounded-full"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-slate-400" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd" /></svg></button>
+        </div>
+    </nav>
+
+    <main class="max-w-6xl mx-auto p-6 space-y-8">
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <div class="lg:col-span-2 space-y-6">
+                <div id="canvas-container">
+                    <div class="relative">
+                        <canvas id="gameCanvas"></canvas>
+                        <div id="gameOverlay" class="absolute inset-0 flex flex-col items-center justify-center bg-white/80 backdrop-blur-sm rounded-xl z-20">
+                            <h2 class="text-3xl font-black text-slate-900 mb-2 tracking-tighter uppercase italic" id="overlay-title">Dino Dash</h2>
+                            <p class="text-slate-500 mb-6 text-sm">Tap or Space to Jump</p>
+                            <button id="start-btn" class="px-8 py-3 green-gradient text-white font-bold rounded-xl shadow-lg hover:scale-105 transition-transform">START DASH</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <!-- Strategic Goal -->
+                    <div class="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
+                        <h3 class="font-bold text-slate-900 mb-4 flex items-center gap-2">Strategic Goal</h3>
+                        <div class="flex items-center justify-between">
+                            <div class="flex-1">
+                                <p id="objective-text" class="text-slate-600 text-sm italic">Loading objectives...</p>
+                                <div class="w-full bg-slate-100 h-2 rounded-full mt-3 overflow-hidden">
+                                    <div id="objective-progress" class="h-full bg-green-500 transition-all duration-500" style="width: 0%"></div>
+                                </div>
+                            </div>
+                            <span id="objective-percent" class="font-bold text-green-600 ml-4">0%</span>
+                        </div>
+                    </div>
+                    
+                    <!-- View Dino Preview (New Section) -->
+                    <div class="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm relative overflow-hidden flex items-center gap-6">
+                        <div class="flex-1">
+                            <h3 class="font-bold text-slate-900 mb-1">Dino Preview</h3>
+                            <p class="text-xs text-slate-500 mb-3 uppercase font-semibold" id="preview-labels">Equipped Accessories</p>
+                            <div class="space-y-1">
+                                <div class="flex items-center gap-2 text-[10px] font-bold">
+                                    <span class="w-2 h-2 rounded-full bg-slate-200" id="preview-skin-dot"></span>
+                                    <span id="preview-skin-name" class="text-slate-700">Emerald Rex</span>
+                                </div>
+                                <div class="flex items-center gap-2 text-[10px] font-bold">
+                                    <span class="w-2 h-2 rounded-full bg-slate-200" id="preview-hat-dot"></span>
+                                    <span id="preview-hat-name" class="text-slate-700">No Hat</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="w-24 h-24 bg-slate-50 rounded-xl border border-slate-100 flex items-center justify-center relative overflow-hidden">
+                            <div id="preview-dino-container" class="preview-bounce">
+                                <!-- Dynamic Dino Preview Rendered Here -->
+                                <canvas id="previewCanvas" width="80" height="80"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="boutique-section" class="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden flex flex-col h-[600px] sticky top-24">
+                <div class="p-6 border-b border-slate-50 flex justify-between items-center bg-white">
+                    <h3 class="font-bold text-slate-900 text-lg tracking-tight">Dino Boutique</h3>
+                    <select id="shop-filter" onchange="renderShop()" class="text-xs font-bold bg-slate-100 p-1 rounded outline-none border-none">
+                        <option value="skin">Skins</option>
+                        <option value="hat">Hats</option>
+                        <option value="trail">Trails</option>
+                        <option value="jump">Jump Effects</option>
+                        <option value="death">Death Effects</option>
+                    </select>
+                </div>
+                <div id="shop-container" class="p-4 space-y-3 overflow-y-auto custom-scrollbar flex-1 bg-slate-50/30"></div>
+            </div>
+        </div>
+        
+        <div class="bg-slate-900 text-slate-400 p-8 rounded-3xl grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div>
+                <h4 class="text-white font-bold mb-2">Dino Dash</h4>
+                <p class="text-sm">Precision is key. Master the rhythm of the spikes and platforms to conquer the leaderboards.</p>
+            </div>
+            <div>
+                <h4 class="text-white font-bold mb-2">Leveling Strategy</h4>
+                <p class="text-sm">Purple Pads are high risk/reward. Blue Pads start the ship section. Red Landing Zones end it.</p>
+            </div>
+            <div>
+                <h4 class="text-white font-bold mb-2">Pro Boutique</h4>
+                <p class="text-sm">Collect coins through distance. Higher levels increase the coin multiplier.</p>
+            </div>
+        </div>
+    </main>
+
+    <!-- Admin Panel -->
+    <div id="adminPanel" class="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[100] hidden items-center justify-center p-4">
+        <div class="bg-white w-full max-w-md rounded-3xl p-8 shadow-2xl">
+            <div id="adminAuth">
+                <h2 class="text-2xl font-black text-slate-900 mb-6">Admin Panel</h2>
+                <input type="password" id="adminPass" class="w-full px-4 py-3 bg-slate-100 rounded-xl mb-4 outline-none" placeholder="Password">
+                <button onclick="checkAdmin()" class="w-full py-3 green-gradient text-white font-bold rounded-xl">Unlock</button>
+                <button onclick="toggleAdmin()" class="w-full mt-2 py-2 text-slate-400 text-sm">Cancel</button>
+            </div>
+            <div id="adminControls" class="hidden space-y-4">
+                <button onclick="adjustCoins(10000)" class="w-full py-3 bg-slate-100 font-bold rounded-xl text-green-700">+10000 Coins</button>
+                <button onclick="unlockEverything()" class="w-full py-3 bg-slate-900 text-white font-bold rounded-xl">Unlock All Items</button>
+                <button onclick="toggleAdmin()" class="w-full py-3 text-slate-400">Exit</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        /** LOADING SCREEN **/
+        window.addEventListener('DOMContentLoaded', () => {
+            const loader = document.getElementById('loading-screen');
+            const progressBg = document.getElementById('loading-progress-bg');
+            const loaderWrapper = document.getElementById('loader-wrapper');
+            const dinoObj = document.getElementById('loading-dino-container');
+            const loadingText = document.getElementById('loading-text');
+            let progress = 0;
+            const interval = setInterval(() => {
+                progress += 2;
+                if (progress >= 100) { progress = 100; clearInterval(interval); startDinoSequence(); }
+                progressBg.style.width = progress + '%';
+            }, 30);
+            function createImpact(x, y) {
+                for (let i = 0; i < 12; i++) {
+                    const p = document.createElement('div');
+                    p.className = 'impact-particle';
+                    p.style.left = x + 'px'; p.style.top = y + 'px';
+                    p.style.setProperty('--tx', (Math.random() - 0.5) * 100 + 'px');
+                    p.style.setProperty('--ty', (Math.random() - 0.8) * 60 + 'px');
+                    document.body.appendChild(p);
+                    setTimeout(() => p.remove(), 600);
+                }
+            }
+            function startDinoSequence() {
+                const wrapperRect = loaderWrapper.getBoundingClientRect();
+                const startX = wrapperRect.left; const endX = wrapperRect.right;
+                const landY = wrapperRect.top - 58; 
+                dinoObj.style.left = startX + 'px'; dinoObj.style.transform = 'translateX(0)'; dinoObj.style.opacity = '1';
+                dinoObj.classList.add('dino-drop');
+                setTimeout(() => {
+                    dinoObj.style.top = landY + 'px';
+                    setTimeout(() => {
+                        createImpact(startX + 30, landY + 55);
+                        dinoObj.classList.remove('dino-drop'); dinoObj.classList.add('dino-walk');
+                        dinoObj.style.left = (endX - 40) + 'px';
+                        const leg1 = document.getElementById('loading-leg-1'), leg2 = document.getElementById('loading-leg-2');
+                        let legInt = setInterval(() => {
+                            leg1.setAttribute('height', leg1.getAttribute('height') == '8' ? '4' : '8');
+                            leg2.setAttribute('height', leg2.getAttribute('height') == '8' ? '4' : '8');
+                        }, 80);
+                        setTimeout(() => {
+                            clearInterval(legInt); dinoObj.classList.remove('dino-walk'); dinoObj.classList.add('dino-fall-out');
+                            dinoObj.style.top = (landY - 60) + 'px'; dinoObj.style.left = (endX + 120) + 'px';
+                            setTimeout(() => {
+                                dinoObj.style.top = (window.innerHeight + 200) + 'px';
+                                loadingText.innerText = "LET'S DASH!";
+                                setTimeout(() => { loader.style.opacity = '0'; setTimeout(() => { loader.remove(); dinoObj.remove(); }, 500); }, 400);
+                            }, 250);
+                        }, 1200);
+                    }, 600);
+                }, 100);
+            }
+        });
+
+        /** GAME ENGINE **/
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const previewCanvas = document.getElementById('previewCanvas');
+        const pctx = previewCanvas.getContext('2d');
+        const overlay = document.getElementById('gameOverlay');
+        const startBtn = document.getElementById('start-btn');
+        let isPlaying = false, frame = 0, score = 0, gameSpeed = 5;
+        let isHolding = false;
+        let lastSpawnX = 800;
+        let flightTime = 0;
+
+        let bgOffset1 = 0; 
+        let bgOffset2 = 0;
+
+        const SHOP_ITEMS = {
+            skin: [
+                { id: 'classic', name: 'Emerald Rex', price: 0, color: '#16a34a' },
+                { id: 'neon', name: 'Neon Night', price: 200, color: '#22d3ee' },
+                { id: 'lava', name: 'Magma Beast', price: 500, color: '#f43f5e' },
+                { id: 'gold', name: 'Midas Touch', price: 1500, color: '#fbbf24' },
+                { id: 'shadow', name: 'Shadow Stalker', price: 2500, color: '#0f172a' },
+                { id: 'frost', name: 'Frost Bite', price: 3000, color: '#93c5fd' },
+                { id: 'toxic', name: 'Toxic Waste', price: 3500, color: '#84cc16' },
+                { id: 'galaxy', name: 'Nebula Walker', price: 5000, color: '#6366f1' },
+                { id: 'jet_black', name: 'Black Hole', price: 7500, color: '#020617' },
+                { id: 'spectral', name: 'Spectral Dino', price: 10000, color: '#e2e8f0' }
+            ],
+            hat: [
+                { id: 'none', name: 'No Hat', price: 0, color: 'transparent' },
+                { id: 'crown', name: 'Royal Crown', price: 400, color: '#facc15' },
+                { id: 'horns', name: 'Demon Horns', price: 700, color: '#ef4444' },
+                { id: 'tophat', name: 'Classy Top', price: 900, color: '#1e293b' },
+                { id: 'propeller', name: 'Propeller Cap', price: 1200, color: '#f87171' },
+                { id: 'halo', name: 'Divine Halo', price: 2000, color: '#fef08a' },
+                { id: 'wizard', name: 'Wizard Hat', price: 2500, color: '#4338ca' },
+                { id: 'detective', name: 'Sleuth Cap', price: 3000, color: '#78350f' },
+                { id: 'pirate', name: 'Captain Hook', price: 3500, color: '#111827' },
+                { id: 'viking', name: 'Norse Horns', price: 4500, color: '#9ca3af' }
+            ],
+            trail: [
+                { id: 'none', name: 'No Trail', price: 0, color: 'transparent' },
+                { id: 'ghost', name: 'Ghost Dust', price: 300, color: 'rgba(148, 163, 184, 0.4)' },
+                { id: 'fire', name: 'Fire Streak', price: 600, color: '#f97316' },
+                { id: 'rainbow', name: 'Rainbow Run', price: 1200, color: 'linear-gradient' },
+                { id: 'bubble', name: 'Bubbles', price: 1500, color: '#7dd3fc' },
+                { id: 'plasma', name: 'Plasma Flow', price: 2500, color: '#d946ef' },
+                { id: 'emerald', name: 'Green Mist', price: 3000, color: '#10b981' },
+                { id: 'electric', name: 'Volt Sparks', price: 4000, color: '#fbbf24' },
+                { id: 'dark_matter', name: 'Dark Particles', price: 5000, color: '#1e1b4b' },
+                { id: 'stardust', name: 'Magic Dust', price: 7000, color: '#ffffff' }
+            ],
+            jump: [
+                { id: 'standard', name: 'Standard', price: 0, color: '#cbd5e1' },
+                { id: 'shockwave', name: 'Shockwave', price: 400, color: '#3b82f6' },
+                { id: 'petals', name: 'Pink Petals', price: 800, color: '#f472b6' },
+                { id: 'ember', name: 'Lava Splash', price: 1200, color: '#b91c1c' },
+                { id: 'leaf', name: 'Nature Burst', price: 1500, color: '#15803d' },
+                { id: 'sonic', name: 'Sonic Boom', price: 2200, color: '#1d4ed8' },
+                { id: 'gold_dust', name: 'Gold Burst', price: 3500, color: '#ca8a04' },
+                { id: 'void', name: 'Void Pulse', price: 5000, color: '#581c87' },
+                { id: 'snow', name: 'Blizzard', price: 6000, color: '#f1f5f9' },
+                { id: 'candy', name: 'Sugar Rush', price: 8000, color: '#ec4899' }
+            ],
+            death: [
+                { id: 'fade', name: 'Fade Out', price: 0, color: '#94a3b8' },
+                { id: 'glitch', name: 'Glitch Mode', price: 500, color: '#a855f7' },
+                { id: 'supernova', name: 'Supernova', price: 2000, color: '#ffffff' },
+                { id: 'pixel', name: 'Pixel Blast', price: 3500, color: '#facc15' },
+                { id: 'blood', name: 'Ink Splat', price: 5000, color: '#991b1b' },
+                { id: 'ghost_pop', name: 'Soul Release', price: 6500, color: '#64748b' },
+                { id: 'confetti', name: 'Party Pop', price: 8000, color: '#22c55e' },
+                { id: 'shatter', name: 'Glass Break', price: 10000, color: '#e2e8f0' },
+                { id: 'portal', name: 'Void Drain', price: 12000, color: '#000000' },
+                { id: 'rebirth', name: 'Holy Flash', price: 15000, color: '#fef08a' }
+            ]
+        };
+
+        let state = { 
+            coins: 0, highscore: 0, level: 1, 
+            owned: { skin: ['classic'], hat: ['none'], trail: ['none'], jump: ['standard'], death: ['fade'] },
+            active: { skin: 'classic', hat: 'none', trail: 'none', jump: 'standard', death: 'fade' }
+        };
+
+        let dino = { x: 80, y: 230, w: 50, h: 50, dy: 0, jumpForce: -12, gravity: 0.65, grounded: true, isPlane: false };
+        let platforms = [], entities = [], particles = [];
+
+        function resize() { canvas.width = 800; canvas.height = 350; }
+        resize();
+
+        function drawBackground() {
+            ctx.fillStyle = '#f0f9ff';
+            ctx.fillRect(0, 0, 800, 350);
+            bgOffset1 = (bgOffset1 + gameSpeed * 0.1) % 800;
+            ctx.fillStyle = '#ffffff';
+            for (let i = 0; i < 2; i++) {
+                let x = (i * 400) - bgOffset1;
+                if (x < -200) x += 800;
+                ctx.beginPath(); ctx.arc(x + 100, 100, 40, 0, Math.PI * 2); ctx.arc(x + 140, 100, 50, 0, Math.PI * 2); ctx.arc(x + 180, 100, 40, 0, Math.PI * 2); ctx.fill();
+            }
+            bgOffset2 = (bgOffset2 + gameSpeed * 0.3) % 800;
+            ctx.fillStyle = '#e2e8f0';
+            for (let i = 0; i < 3; i++) {
+                let x = (i * 400) - bgOffset2;
+                if (x < -400) x += 1200;
+                ctx.beginPath(); ctx.moveTo(x, 330); ctx.lineTo(x + 200, 150); ctx.lineTo(x + 400, 330); ctx.fill();
+            }
+        }
+
+        function drawDinoModel(targetCtx, x, y, color, hatId, scale = 1, isPlane = false) {
+            targetCtx.save(); 
+            targetCtx.translate(x, y);
+            targetCtx.scale(scale, scale);
+            targetCtx.fillStyle = color;
+            
+            if (isPlane) {
+                targetCtx.beginPath(); targetCtx.roundRect(5, 20, 45, 20, 5); targetCtx.fill();
+                targetCtx.beginPath(); targetCtx.moveTo(10, 20); targetCtx.lineTo(0, 5); targetCtx.lineTo(15, 20); targetCtx.fill(); 
+                targetCtx.fillStyle = 'white'; targetCtx.fillRect(35, 25, 6, 6);
+            } else {
+                targetCtx.beginPath(); targetCtx.moveTo(5, 40); targetCtx.lineTo(15, 35); targetCtx.lineTo(15, 50); targetCtx.fill(); 
+                targetCtx.beginPath(); targetCtx.roundRect(13, 30, 25, 25, 5); targetCtx.fill(); 
+                targetCtx.beginPath(); targetCtx.roundRect(30, 15, 10, 20, 3); targetCtx.fill(); 
+                targetCtx.beginPath(); targetCtx.roundRect(33, 10, 22, 12, 4); targetCtx.fill(); 
+                targetCtx.fillRect(20, 55, 6, 8); targetCtx.fillRect(30, 55, 6, 8); 
+                targetCtx.fillStyle = 'white'; targetCtx.fillRect(45, 13, 4, 4);
+                
+                if (hatId === 'crown') {
+                    targetCtx.fillStyle = '#facc15'; targetCtx.beginPath(); targetCtx.moveTo(35, 10); targetCtx.lineTo(38, 0); targetCtx.lineTo(44, 10); targetCtx.lineTo(50, 0); targetCtx.lineTo(53, 10); targetCtx.fill();
+                } else if (hatId === 'horns') {
+                    targetCtx.fillStyle = '#ef4444'; targetCtx.beginPath(); targetCtx.moveTo(35, 10); targetCtx.lineTo(30, -5); targetCtx.lineTo(40, 5); targetCtx.fill(); targetCtx.beginPath(); targetCtx.moveTo(50, 10); targetCtx.lineTo(55, -5); targetCtx.lineTo(45, 5); targetCtx.fill();
+                } else if (hatId === 'tophat') {
+                    targetCtx.fillStyle = '#1e293b'; targetCtx.fillRect(32, 2, 24, 8); targetCtx.fillRect(35, -10, 18, 12);
+                } else if (hatId === 'propeller') {
+                    targetCtx.fillStyle = '#f87171'; targetCtx.fillRect(35, 6, 20, 4); targetCtx.fillStyle = '#ffffff'; targetCtx.fillRect(43, 0, 4, 10);
+                } else if (hatId === 'halo') {
+                    targetCtx.strokeStyle = '#fef08a'; targetCtx.lineWidth = 3; targetCtx.beginPath(); targetCtx.ellipse(43, 3, 12, 4, 0, 0, Math.PI * 2); targetCtx.stroke();
+                } else if (hatId === 'wizard') {
+                    targetCtx.fillStyle = '#4338ca'; targetCtx.beginPath(); targetCtx.moveTo(30, 10); targetCtx.lineTo(55, 10); targetCtx.lineTo(42, -15); targetCtx.fill();
+                }
+            }
+            targetCtx.restore();
+        }
+
+        function updatePreview() {
+            pctx.clearRect(0, 0, previewCanvas.width, previewCanvas.height);
+            const skin = SHOP_ITEMS.skin.find(s => s.id === state.active.skin);
+            const hat = SHOP_ITEMS.hat.find(h => h.id === state.active.hat);
+            
+            // Update labels
+            document.getElementById('preview-skin-name').innerText = skin.name;
+            document.getElementById('preview-hat-name').innerText = hat.name;
+            document.getElementById('preview-skin-dot').style.backgroundColor = skin.color;
+            document.getElementById('preview-hat-dot').style.backgroundColor = hat.color === 'transparent' ? '#cbd5e1' : hat.color;
+            
+            // Draw model
+            drawDinoModel(pctx, 10, 10, skin.color, state.active.hat, 1.1, false);
+        }
+
+        function createParticle(x, y, color, type = 'trail') {
+            particles.push({
+                x, y, color, 
+                vx: (Math.random() - 0.5) * 2, vy: (Math.random() - 0.5) * 2, 
+                life: 1.0, decay: type === 'trail' ? 0.05 : 0.02,
+                size: Math.random() * 5 + 2
+            });
+        }
+
+        function startGame() {
+            if (isPlaying) return;
+            isPlaying = true; score = 0; gameSpeed = 5 + (state.level * 0.5); 
+            platforms = []; entities = []; particles = []; flightTime = 0;
+            lastSpawnX = 800; dino.y = 280; dino.dy = 0; dino.isPlane = false;
+            overlay.style.opacity = '0';
+            setTimeout(() => overlay.classList.add('hidden'), 300);
+            requestAnimationFrame(update);
+        }
+        startBtn.onclick = (e) => { e.stopPropagation(); startGame(); };
+
+        function triggerDeathEffect() {
+            const effect = state.active.death;
+            if (effect === 'supernova') for(let i=0; i<80; i++) createParticle(dino.x + 25, dino.y + 25, `hsl(${Math.random()*360}, 100%, 70%)`, 'death');
+            else if (effect === 'glitch') for(let i=0; i<20; i++) createParticle(dino.x + 25, dino.y + 25, '#a855f7', 'death');
+        }
+
+        function gameOver() {
+            isPlaying = false; triggerDeathEffect();
+            overlay.classList.remove('hidden');
+            setTimeout(() => overlay.style.opacity = '1', 10);
+            state.coins += Math.floor(score / 10);
+            if (score > state.highscore) state.highscore = score;
+            saveState(); updateUI();
+        }
+
+        function spawnLevelSegment() {
+            const sx = lastSpawnX + 250 + (Math.random() * 50);
+            let type;
+
+            if (dino.isPlane) {
+                if (flightTime > 500) {
+                    type = 'plane_exit';
+                    flightTime = 0;
+                } else {
+                    type = Math.random() > 0.4 ? 'air_combat' : 'plane_hazard';
+                }
+            } else {
+                const pool = ['spike_jump', 'pad_to_platform', 'platform_chain', 'bird_hazard', 'plane_entry', 'm_precision_jump', 'm_pad_trap', 'm_single_spike', 'm_triple_spike'];
+                if (state.level >= 3) pool.push('moving_blade');
+                type = pool[Math.floor(Math.random() * pool.length)];
+            }
+
+            switch(type) {
+                case 'm_single_spike':
+                    entities.push({ type: 'spike', x: sx, y: 285, w: 30, h: 40 });
+                    lastSpawnX = sx + 40; break;
+                case 'm_triple_spike':
+                    entities.push({ type: 'spike', x: sx, y: 285, w: 25, h: 35 });
+                    entities.push({ type: 'spike', x: sx + 25, y: 285, w: 25, h: 35 });
+                    entities.push({ type: 'spike', x: sx + 50, y: 285, w: 25, h: 35 });
+                    lastSpawnX = sx + 80; break;
+                case 'm_precision_jump':
+                    entities.push({ type: 'spike', x: sx, y: 285, w: 25, h: 35 });
+                    entities.push({ type: 'spike', x: sx + 30, y: 285, w: 25, h: 35 });
+                    entities.push({ type: 'jumpPad', x: sx + 75, y: 285, w: 40, h: 15 });
+                    entities.push({ type: 'spike', x: sx + 135, y: 285, w: 25, h: 35 });
+                    entities.push({ type: 'spike', x: sx + 165, y: 285, w: 25, h: 35 });
+                    lastSpawnX = sx + 200; break;
+                case 'm_pad_trap':
+                    entities.push({ type: 'spike', x: sx + 40, y: 285, w: 25, h: 25 });
+                    entities.push({ type: 'spike', x: sx + 65, y: 285, w: 25, h: 25 });
+                    entities.push({ type: 'jumpPad', x: sx + 50, y: 250, w: 40, h: 10 });
+                    platforms.push({ x: sx + 40, y: 260, w: 60, h: 10 });
+                    lastSpawnX = sx + 150; break;
+                case 'spike_jump': entities.push({ type: 'spike', x: sx, y: 285, w: 30, h: 40 }); lastSpawnX = sx + 40; break;
+                case 'pad_to_platform': 
+                    entities.push({ type: 'jumpPad', x: sx, y: 285, w: 40, h: 15 }); 
+                    platforms.push({ x: sx + 80, y: 150, w: 120, h: 15 }); lastSpawnX = sx + 200; break;
+                case 'platform_chain': 
+                    platforms.push({ x: sx, y: 200, w: 100, h: 15 }); 
+                    platforms.push({ x: sx + 150, y: 120, w: 100, h: 15 }); lastSpawnX = sx + 250; break;
+                case 'bird_hazard': 
+                    entities.push({ type: 'bird', x: sx, y: 240, w: 30, h: 20 }); 
+                    entities.push({ type: 'bird', x: sx + 120, y: 180, w: 30, h: 20 }); lastSpawnX = sx + 150; break;
+                case 'plane_entry': entities.push({ type: 'planePad', x: sx, y: 240, w: 40, h: 40 }); lastSpawnX = sx + 50; break;
+                case 'plane_hazard':
+                    entities.push({ type: 'bird', x: sx, y: 100 + (Math.random()*150), w: 30, h: 30 });
+                    lastSpawnX = sx + 50; break;
+                case 'air_combat':
+                    for(let i=0; i<4; i++) {
+                        entities.push({ type: 'bird', x: sx + (i*120), y: 50 + (Math.random()*40), w: 40, h: 20 });
+                        entities.push({ type: 'bird', x: sx + (i*120), y: 260 + (Math.random()*40), w: 40, h: 20 });
+                    }
+                    lastSpawnX = sx + 500; break;
+                case 'plane_exit': entities.push({ type: 'landPad', x: sx, y: 0, w: 20, h: 350 }); lastSpawnX = sx + 100; break;
+                case 'moving_blade': entities.push({ type: 'blade', x: sx, y: 100, w: 50, h: 50, speed: 4 }); lastSpawnX = sx + 100; break;
+            }
+        }
+
+        function update() {
+            if (!isPlaying) return;
+            frame++;
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            gameSpeed += 0.0012; score += 0.2;
+            drawBackground();
+
+            if (isHolding && isPlaying && dino.grounded && !dino.isPlane) {
+                dino.dy = dino.jumpForce;
+                dino.grounded = false;
+                triggerJumpEffect();
+            }
+
+            if (state.active.trail !== 'none') {
+                const trailItem = SHOP_ITEMS.trail.find(t => t.id === state.active.trail);
+                let c = trailItem.color;
+                if (trailItem.id === 'rainbow') c = `hsl(${frame * 5 % 360}, 80%, 60%)`;
+                if (frame % 3 === 0) createParticle(dino.x + 10, dino.y + 30, c);
+            }
+
+            if (dino.isPlane) {
+                flightTime++;
+                if (isHolding) dino.dy -= 0.8; else dino.dy += 0.4;
+                dino.dy = Math.max(-7, Math.min(7, dino.dy)); dino.y += dino.dy; dino.grounded = false;
+            } else {
+                flightTime = 0;
+                dino.dy += dino.gravity; dino.y += dino.dy; dino.grounded = false;
+            }
+            if (dino.y > 280) { dino.y = 280; dino.dy = 0; dino.grounded = true; if (dino.isPlane) { dino.isPlane = false; flightTime = 0; } }
+            if (dino.y < 0) { dino.y = 0; dino.dy = 0; }
+
+            ctx.strokeStyle = '#e2e8f0'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(0, 330); ctx.lineTo(800, 330); ctx.stroke();
+            lastSpawnX -= gameSpeed;
+            if (lastSpawnX < 800) spawnLevelSegment();
+
+            particles.forEach((p, index) => {
+                p.x -= gameSpeed; p.x += p.vx; p.y += p.vy; p.life -= p.decay;
+                if (p.life <= 0) particles.splice(index, 1);
+                else { ctx.globalAlpha = p.life; ctx.fillStyle = p.color; ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI*2); ctx.fill(); }
+            });
+            ctx.globalAlpha = 1.0;
+
+            [...platforms, ...entities].forEach((obj) => {
+                obj.x -= gameSpeed;
+                if (obj.type === 'blade') { obj.y += obj.speed; if (obj.y > 280 || obj.y < 50) obj.speed *= -1; }
+                if (obj.w) {
+                    if (obj.type === 'spike') {
+                        ctx.fillStyle = '#ef4444'; ctx.beginPath(); ctx.moveTo(obj.x, obj.y + 45); ctx.lineTo(obj.x + obj.w / 2, obj.y + 45 - obj.h); ctx.lineTo(obj.x + obj.w, obj.y + 45); ctx.fill();
+                    } else if (obj.type === 'jumpPad') {
+                        ctx.fillStyle = '#a855f7'; ctx.fillRect(obj.x, obj.y + 30, obj.w, obj.h); ctx.fillStyle = 'white'; ctx.fillRect(obj.x + 5, obj.y + 35, obj.w - 10, 2);
+                    } else if (obj.type === 'planePad') {
+                        ctx.fillStyle = '#3b82f6'; ctx.beginPath(); ctx.arc(obj.x + 20, obj.y + 20, 20, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = 'white'; ctx.font = 'bold 10px Inter'; ctx.textAlign = 'center'; ctx.fillText("FLY", obj.x + 20, obj.y + 24);
+                    } else if (obj.type === 'landPad') {
+                        let gradient = ctx.createLinearGradient(0, 0, 0, 350); gradient.addColorStop(0, 'rgba(244, 63, 94, 0.1)'); gradient.addColorStop(0.5, 'rgba(244, 63, 94, 0.8)'); gradient.addColorStop(1, 'rgba(244, 63, 94, 0.1)');
+                        ctx.fillStyle = gradient; ctx.fillRect(obj.x, obj.y, obj.w, obj.h); ctx.fillStyle = 'white'; ctx.save(); ctx.translate(obj.x + 10, 175); ctx.rotate(-Math.PI/2); ctx.font = 'bold 12px Inter'; ctx.textAlign = 'center'; ctx.fillText("LANDING ZONE", 0, 0); ctx.restore();
+                    } else if (obj.type === 'bird' || obj.type === 'blade') {
+                        ctx.fillStyle = '#f97316'; if (obj.type === 'blade') { ctx.save(); ctx.translate(obj.x + 20, obj.y + 20); ctx.rotate(frame * 0.1); ctx.fillRect(-20, -4, 40, 8); ctx.fillRect(-4, -20, 8, 40); ctx.restore(); } else ctx.fillRect(obj.x, obj.y, obj.w, obj.h);
+                    } else { ctx.fillStyle = '#475569'; ctx.roundRect(obj.x, obj.y, obj.w, obj.h, 4); ctx.fill(); }
+                }
+
+                const dx = (dino.x + 25) - (obj.x + (obj.w||0) / 2);
+                const dy = (dino.y + 25) - (obj.y + (obj.h||0) / 2);
+                const combinedW = (dino.w + (obj.w||0)) / 2;
+                const combinedH = (dino.h + (obj.h||0)) / 2;
+                if (Math.abs(dx) < combinedW && Math.abs(dy) < combinedH) {
+                    if (obj.type === 'spike' || obj.type === 'bird' || obj.type === 'blade') gameOver();
+                    else if (obj.type === 'jumpPad') { dino.dy = -19; dino.grounded = false; triggerJumpEffect(); }
+                    else if (obj.type === 'planePad') { dino.isPlane = true; flightTime = 0; }
+                    else if (obj.type === 'landPad') { if (dino.isPlane) { dino.isPlane = false; flightTime = 0; dino.dy = 2; } }
+                    else if (!obj.type) { if (dino.dy > 0 && dino.y + dino.h < obj.y + 20) { dino.y = obj.y - dino.h; dino.dy = 0; dino.grounded = true; } }
+                }
+            });
+
+            platforms = platforms.filter(p => p.x > -400);
+            entities = entities.filter(e => e.x > -400);
+            
+            const skin = SHOP_ITEMS.skin.find(s => s.id === state.active.skin);
+            drawDinoModel(ctx, dino.x, dino.y, skin.color, state.active.hat, 1, dino.isPlane);
+
+            ctx.fillStyle = '#64748b'; ctx.font = '800 14px Inter'; ctx.textAlign = 'right'; ctx.fillText(`SCORE: ${Math.floor(score)}`, 780, 30);
+            updateObjectiveBar();
+            requestAnimationFrame(update);
+        }
+
+        function triggerJumpEffect() {
+            const effect = state.active.jump;
+            const jumpItem = SHOP_ITEMS.jump.find(j => j.id === effect);
+            for(let i=0; i<15; i++) createParticle(dino.x + 25, dino.y + 50, jumpItem.color, 'jump');
+        }
+
+        function handleAction(down) {
+            isHolding = down;
+            if (down && isPlaying && dino.grounded && !dino.isPlane) { 
+                dino.dy = dino.jumpForce; 
+                dino.grounded = false; 
+                triggerJumpEffect(); 
+            }
+        }
+        window.addEventListener('keydown', e => { if(e.code === 'Space' || e.code === 'ArrowUp') handleAction(true) });
+        window.addEventListener('keyup', e => { if(e.code === 'Space' || e.code === 'ArrowUp') handleAction(false) });
+        canvas.addEventListener('pointerdown', (e) => { e.preventDefault(); if (!isPlaying) return; handleAction(true); });
+        window.addEventListener('pointerup', () => handleAction(false));
+
+        function updateUI() {
+            document.getElementById('ui-coins').innerText = state.coins.toLocaleString();
+            document.getElementById('ui-level').innerText = state.level;
+            document.getElementById('overlay-title').innerText = "Dino Dash";
+            renderShop();
+            updatePreview();
+        }
+        function updateObjectiveBar() {
+            const goals = [1000, 2500, 5000, 10000];
+            const target = goals[state.level-1] || 99999;
+            const progress = Math.min(100, (state.highscore / target) * 100);
+            document.getElementById('objective-text').innerText = `Next Milestone: Reach ${target} Score`;
+            document.getElementById('objective-progress').style.width = progress + '%';
+            document.getElementById('objective-percent').innerText = Math.floor(progress) + '%';
+            if (state.highscore >= target && state.level < 5) { state.level++; saveState(); updateUI(); }
+        }
+        function renderShop() {
+            const type = document.getElementById('shop-filter').value;
+            const container = document.getElementById('shop-container');
+            container.innerHTML = '';
+            SHOP_ITEMS[type].forEach(item => {
+                const owned = state.owned[type].includes(item.id), active = state.active[type] === item.id;
+                container.innerHTML += `<div class="flex items-center justify-between p-3 rounded-xl border-2 transition-all ${active ? 'border-green-500 bg-green-50 shadow-sm' : 'border-slate-100 hover:border-slate-300'}"><div class="flex items-center gap-3"><div class="w-8 h-8 rounded shadow-inner" style="background:${item.color === 'linear-gradient' ? 'linear-gradient(to right, red, yellow, green, blue)' : item.color}; border: 1px solid #ddd"></div><span class="font-bold text-xs">${item.name}</span></div><button onclick="${owned ? `equipItem('${type}', '${item.id}')` : `buyItem('${type}', '${item.id}')`}" class="text-[10px] font-bold px-3 py-1 rounded-lg ${active ? 'bg-green-600' : 'bg-slate-900'} text-white transition-transform active:scale-95">${active ? 'ACTIVE' : (owned ? 'EQUIP' : item.price + ' 🪙')}</button></div>`;
+            });
+        }
+        function buyItem(type, id) { const item = SHOP_ITEMS[type].find(x => x.id === id); if (state.coins >= item.price) { state.coins -= item.price; state.owned[type].push(id); state.active[type] = id; saveState(); updateUI(); } }
+        function equipItem(type, id) { state.active[type] = id; saveState(); updateUI(); }
+        function saveState() { localStorage.setItem('dino_v8', JSON.stringify(state)); }
+        function checkAdmin() { if(document.getElementById('adminPass').value === 'Admin1212') { document.getElementById('adminAuth').classList.add('hidden'); document.getElementById('adminControls').classList.remove('hidden'); }}
+        function toggleAdmin() { document.getElementById('adminPanel').classList.toggle('hidden'); document.getElementById('adminPanel').classList.toggle('flex'); }
+        function adjustCoins(n) { state.coins += n; saveState(); updateUI(); }
+        function unlockEverything() { Object.keys(SHOP_ITEMS).forEach(k => state.owned[k] = SHOP_ITEMS[k].map(i => i.id)); saveState(); updateUI(); }
+
+        const saved = localStorage.getItem('dino_v8');
+        if (saved) state = JSON.parse(saved);
+        updateUI();
+    </script>
+</body>
+</html>
